@@ -1,0 +1,6 @@
+[package]
+name = "actix_web_tokio_postgres_example"
+version = "0.1.0"
+authors = ["Jacob Lerche <jacob.lerche@gmail.com>"]
+
+[dependencies]

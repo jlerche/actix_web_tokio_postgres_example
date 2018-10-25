@@ -26,8 +26,7 @@ impl PgConnection {
                 .and_then(|(cl, conn), act, ctx| {
                     actix::Arbiter::spawn(conn.map_err(|e| panic!("{}", e)));
                     fut::ok(())
-                }).wait(ctx)
-            ;
+                }).wait(ctx);
             act
         })
     }

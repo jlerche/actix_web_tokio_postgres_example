@@ -1,7 +1,7 @@
 use std::io;
 
 use actix;
-use actix::{WrapFuture, Actor, fut, ActorFuture, ContextFutureSpawner};
+use actix::{WrapFuture, Actor, fut, ActorFuture, ContextFutureSpawner, AsyncContext};
 use futures::{Future};
 use tokio_postgres;
 
@@ -23,7 +23,21 @@ impl PgConnection {
 
             hs.map_err(|_| panic!("cannot connect to postgresql"))
                 .into_actor(&act)
-                .and_then(|(cl, conn), act, ctx| {
+                .and_then(|(mut cl, conn), act, ctx| {
+                    ctx.wait(
+                        cl.prepare("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY NOT NULL, email VARCHAR(100) NOT NULL);")
+                            .map_err(|_| ())
+                            .into_actor(act)
+                            .and_then(move |st, actt, ctxx| {
+                                ctxx.wait(
+                                    cl.execute(&st, &[]) // .poll().unwrap() also works, i don't like it though for some reason
+                                        .map_err(|_| ())
+                                        .into_actor(actt)
+                                        .and_then(|_,_,_| {fut::ok(())})
+                                );
+                                fut::ok(())
+                            }),
+                    );
                     actix::Arbiter::spawn(conn.map_err(|e| panic!("{}", e)));
                     fut::ok(())
                 }).wait(ctx);

@@ -2,7 +2,7 @@ use std::io;
 
 use actix;
 use actix::{WrapFuture, Actor, fut, ActorFuture, ContextFutureSpawner, AsyncContext};
-use futures::{Future};
+use futures::{Future, IntoFuture};
 use tokio_postgres;
 
 pub struct PgConnection {
@@ -91,5 +91,29 @@ impl PgConnection {
                 }).wait(ctx);
             act
         })
+    }
+}
+
+pub struct InitializeDatabase;
+
+impl actix::Message for InitializeDatabase {
+    type Result = io::Result<u64>;
+}
+
+impl actix::Handler<InitializeDatabase> for PgConnection {
+    type Result = actix::ResponseFuture<u64, io::Error>;
+
+    fn handle(&mut self, _msg: InitializeDatabase, _ctx: &mut Self::Context) -> Self::Result {
+        Box::new(
+            self.client
+                .as_mut()
+                .unwrap()
+                .execute(self.create_table_st.as_ref().unwrap(), &[])
+                .into_future()
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+                .and_then(|num_rows| {
+                    Ok(num_rows)
+                }),
+        )
     }
 }

@@ -8,11 +8,13 @@ extern crate tokio_postgres;
 #[macro_use]
 extern crate serde_derive;
 
+mod handlers;
 mod database;
 mod apps;
 
 use actix_web::{HttpRequest, HttpResponse, FutureResponse, http, AsyncResponder, middleware};
 
+use handlers::user_handlers;
 use apps::app::AppState;
 use database::db::PgConnection;
 use futures::future;
@@ -33,24 +35,32 @@ fn main() {
             .resource("/healthz", |r| r.method(http::Method::GET).a(|_: &HttpRequest<AppState>| -> FutureResponse<HttpResponse> {
                 let fut = future::ok(HttpResponse::new(http::StatusCode::OK));
                 fut.responder()
-            }))
+            })).scope("/user", |scope| {
+            scope
+                // middleware might go here
+                .resource("", |r| {
+                    r.route().filter(actix_web::pred::Get()).a(user_handlers::user_list_handler);
+                    r.route().filter(actix_web::pred::Post()).a(user_handlers::user_create_handler);
+                })
+                .resource("/{id}", |r| {
+                    r.route().filter(actix_web::pred::Get()).a(user_handlers::user_detail_handler);
+                    r.route().filter(actix_web::pred::Put()).a(user_handlers::user_update_handler);
+                    r.route().filter(actix_web::pred::Delete()).a(user_handlers::user_delete_handler);
+                })
+        })
     })
         .bind("127.0.0.1:8080")
         .unwrap()
         .start();
 
-//    addr
-//        .do_send(database::db::InitializeDatabase);
-//        .send(database::db::InitializeDatabase)
-//        .from_err::<actix::MailboxError>()
-//        .and_then(|res| {
-//            println!("num lines from db intialization: {}", res.unwrap());
-//            Ok(())
-//        }).poll().expect("failed to initialize db");
-    actix::Arbiter::spawn(addr.send(database::db::InitializeDatabase).map_err(|_| ()).map(|res| {
-        println!("{}", res.unwrap());
-        ()
-    }));
+    actix::Arbiter::spawn(
+        addr.send(database::db::InitializeDatabase)
+            .map_err(|_| ())
+            .map(|res| {
+                println!("{}", res.unwrap());
+                ()
+            })
+    );
 
     println!("Started http server: 127.0.0.1:8080");
     let _ = sys.run();
